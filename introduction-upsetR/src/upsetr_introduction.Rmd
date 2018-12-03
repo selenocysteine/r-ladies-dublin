@@ -120,7 +120,7 @@ tidy_flags_data_col %>%
 ```
   
 
-Note that some flags have some symbols / drawings on them beside the traditional bars and stripes, hence the 4+ colours on some flags.
+Note that some flags have some symbols / drawings on them beside the traditional bars and stripes, hence the 4+ colours.
 
 Now, another plot showing the amount of flags per each colour:
 
