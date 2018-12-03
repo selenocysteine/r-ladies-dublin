@@ -60,11 +60,25 @@ Let's give a quick view to the data contained in the dataset by making some **ex
 
 > **A tiny problem:** the input dataframe is in a **wide format** (1 column for the identifier (country) and 1 column per variable), while ggplot2 prefers a **narrow format** (1 column with an identifier (country), 1 column with variable names, 1 column with the value for each variable). 
 
-Thus, we start by **reshaping** the dataset into a **narrow format**:
+Thus, we start by **reshaping** the dataset into a **narrow format**, and by splitting it in two parts (quantitative vs binary attributes):
 ```{r}
-tidy_flags_data <- flags_data %>%
-  gather(key, value, -country)
-head(tidy_flags_data, 5)
+tidy_flags_data_quant <- flags_data %>%
+  dplyr::select(country, bars, stripes) %>%
+  tidyr::gather(type, number, -country)
+head(tidy_flags_data_quant, 5)
+
+tidy_flags_data_col <- flags_data %>%
+  dplyr::select(-c(bars, stripes)) %>%
+  tidyr::gather(colour, value, -country) %>%
+  # As this is binary data, 
+  # we don't need to keep track of the 0 values
+  dplyr::filter(value > 0) %>%
+  dplyr::select(-value) %>%
+  # We sort the colours by frequency
+  # (getting the most frequent ones first)
+  dplyr::mutate(colour = forcats::fct_infreq(.$colour))
+
+head(tidy_flags_data_col, 5)
 ```
 
 We also define a **colour palette**, using some official hex colour codes from some european flags (because why not):
@@ -79,28 +93,29 @@ flag_palette <- c("black" = "black",
 ```
 
 First, let's have a bird's-eye view of the colours of the flags in the dataset:
-```{r fig.height = 7, fig.width = 4.5}
-tidy_flags_data %>%
-  # filter away rows with bars and stripes data
-  dplyr::filter(!(key %in% c("bars", "stripes"))) %>% 
-  # the actual plot
+```{r fig.height = 7.5, fig.width = 3.5}
+tidy_flags_data_col %>%
   ggplot() +
-  geom_bar(aes(x = country, 
-               y = value,
-               fill = key),
-           stat = "identity",
-           show.legend = FALSE,
-           color = "black") +
+  geom_tile(
+    aes(x = country,
+    y = colour,
+    fill = colour),
+    colour = "black",
+    size = .3,
+    show.legend = FALSE
+    ) +
   scale_fill_manual(values = flag_palette) +
   # aesthetic tweaks
-  theme_classic() + 
+  theme_bw() + 
   coord_flip() +
-  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_discrete(limits = rev(levels(tidy_flags_data_col$country))) +
   theme(text = element_text(size = 15),
         axis.line.x = element_blank(),
         axis.title.x = element_blank(),
         axis.text.x = element_blank(),
-        axis.ticks.x = element_blank()) +
+        axis.ticks.x = element_blank(),
+        panel.grid = element_line(size = .2),
+        panel.border = element_blank()) +
   xlab("")
 ```
   
@@ -110,19 +125,16 @@ Note that some flags have some symbols / drawings on them beside the traditional
 Now, another plot showing the amount of flags per each colour:
 
 ```{r message = FALSE, warning = FALSE, fig.height = 5, fig.width = 5}
-tidy_flags_data %>%
-  # filter away rows with bars and stripes data
-  dplyr::filter(!(key %in% c("bars", "stripes"))) %>%
-  # this data is binary (yes/no), so we will just plot the yes values
-  dplyr::filter(value > 0) %>% 
-  # the actual plot
+tidy_flags_data_col %>%
   ggplot() + 
-  geom_bar(aes(x = key,
-                     fill = key),
-                 stat = "count",
-                 color = "black",
-                 position = "dodge",
-                 show.legend = FALSE) +
+  geom_bar(
+    aes(x = colour,
+    fill = colour),
+    stat = "count",
+    color = "black",
+    position = "dodge",
+    show.legend = FALSE
+    ) +
   # aesthetic tweaks
   theme_classic() + 
   scale_fill_manual(values = flag_palette) +
@@ -134,18 +146,15 @@ tidy_flags_data %>%
 And last but not least, some information about bars and stripes (quantitative variable):
 
 ```{r, warning = FALSE, fig.height = 5, fig.width = 4.5}
-tidy_flags_data %>%
-  # filter away rows with bars and stripes data
-  dplyr::filter(key %in% c("bars", "stripes")) %>%
-  # the actual plot
+tidy_flags_data_quant %>%
   ggplot() +
-  geom_bar(aes(x = as.factor(value),
-               fill = key),
+  geom_bar(aes(x = as.factor(number),
+               fill = type),
            stat = "count",
            color = "black",
            show.legend = FALSE) +
   # aesthetic tweaks
-  facet_grid(~ key) +
+  facet_grid(~ type) +
   theme_classic() +
   scale_fill_brewer(palette = "Set1") +
   xlab("number of items per flag") +
@@ -167,13 +176,19 @@ I just put here a bit of code that exploit the tidyverse library to quickly tran
 # This procedure is a bit awkward and possibly not the smartest, 
 # you can visualise it step by step to get a sense of what it does
 flags_list = flags_data %>%
-  tidyr::gather(key, value, -country) %>%
-  dplyr::filter(value > 0) %>%
-  dplyr::mutate(ID = 1:nrow(.)) %>%
-  tidyr::spread(key, country) %>%
-  dplyr::select(-c(ID, value)) %>%
-  as.list() %>%
-  lapply(function(x) x[!is.na(x)])
+    # Change the dataframe to a narrow format
+    tidyr::gather(key, value, -country) %>%
+    # Remove the rows with value = 0 
+    # (i.e. when a country does not belong to the set specified in key)
+    dplyr::filter(value > 0) %>%
+    # Remove the value column as it is not needed
+    dplyr::select(-value) %>%
+    # Group the data by key and create a new column
+    # with all the countries that are associated to each key
+    dplyr::group_by(key) %>% 
+    dplyr::do(data = as.character(.$country)) %>% 
+    # Convert to a named list of lists
+    base::with(set_names(data, key))
 ```
 
 Output:
@@ -185,6 +200,7 @@ head(flags_list, 2)
 #### 2 sets examples, using the R libraries venn and Vennerable
 Let's show how many European flags have **both stripes and bars** with a simple Venn diagram generated with the **venn** library (note: this library also accepts binary dataframes, but we will use the previously generated list of vectors *flags_list*):
 ```{r}
+#library(venn)
 flags_list %>% 
   # Extracting just the two sets of interest
   magrittr::extract(c("bars", "stripes")) %>%
@@ -198,7 +214,7 @@ So, no European flags have both bars and stripes. In my opinion, this type of vi
 
 We can replot this with the **Vennerable** library, that is a bit more flexible in some regards, for instance by allowing to define **Euler plots** (not showing empty intersections), and to weight the area of each circle:
 ```{r}
-library(Vennerable)
+#library(Vennerable)
 flags_list %>%
   magrittr::extract(c("bars", "stripes")) %>%
   # First, we have to create a Vennerable::Venn() object, 
@@ -216,6 +232,7 @@ What if we are interested in seeing how the nine different colours are combined 
 
 Vennerable throws an error, because we are asking it to deal with too many subsets (9):
 ```{r eval=FALSE}
+#library(Vennerable)
 flags_list %>%
   magrittr::extract(!(names(.) %in% c("bars", "stripes"))) %>%
   Vennerable::Venn() %>%
@@ -224,6 +241,7 @@ flags_list %>%
 
 We can remove the least common colours (orange and black), but we will still get an unreadable result:
 ```{r}
+#library(Vennerable)
 flags_list %>%
   magrittr::extract(!(names(.) %in% c("bars", "stripes", "orange", "black"))) %>%
   Vennerable::Venn() %>%
@@ -233,23 +251,27 @@ flags_list %>%
 The venn library is more optimised to deal with multiple sets. Here, we get something quite pretty. But does it really convey enough information to justify using a plot instead of a table? Is it easily readable or interpretable? (the answer is of course highly subjective).
 
 ```{r}
+#library(venn)
 flags_list %>%
   magrittr::extract(!(names(.) %in% c("bars", "stripes"))) %>%
-  venn::venn(zcolor = flag_palette[names(.)], # colour for each subset; the palette has to be in the same order as the list of sets, so we reorder it
+  # the option zcolor can be used to set a predetermined colour for each subset; 
+  # the palette has to be in the same order as the list of sets, so we reorder it
+  venn::venn(zcolor = flag_palette[names(.)], 
              cexil = 1,
              cexsn = 1)
 ```
 
 
 ## Finally, UpSetR!
-UpSetR is a very flexible tool that implements the upset format, originally invented by Lex *et al.* ([source](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4720993/)), for the visualisation of multiple sets with many intersections. The library was originally developed for genomic data, and published in the journal *Bioinformatics* in 2017 ([source](https://academic.oup.com/bioinformatics/article/33/18/2938/3884387)).
+UpSetR is an R implementation of the upset plot format (originally invented by Lex *et al.*, [source](https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4720993/)), that can be used for the visualisation of intersections of multiple sets. The UpsetR library was originally developed for the analysis of genomic data, and published in the journal *Bioinformatics* in 2017 ([source](https://academic.oup.com/bioinformatics/article/33/18/2938/3884387)).
 
-The vignettes, available at [https://cran.r-project.org/web/packages/UpSetR/README.html](https://cran.r-project.org/web/packages/UpSetR/README.html), illustrate its usage more in detail. There are still some bugs and awkward features, but it is overall very promising and already extremely useful.
+The vignettes, available at [https://cran.r-project.org/web/packages/UpSetR/README.html](https://cran.r-project.org/web/packages/UpSetR/README.html), illustrate its usage more in detail. There are still some bugs and awkward features, but it is overall promising and already useful.
 
-We can use as an input our initial **binary dataframe** *flags_data*. Note that UpsetR is quite smart, and it will automatically **ignore non-binary columns** and treat them as **metadata** (attributes) for each datapoint. 
+We can use as an input our initial **binary dataframe** *flags_data*. Note that UpsetR is smart enough to automatically **ignore non-binary columns** and treat them as **metadata** (attributes) of each datapoint. 
 
-Just by plotting our flag colours with default options, we already get a very clear outline of the combinations of different colours in our European flags:
+Just by plotting our flag colours with default options, we already get a much clearer outline of the combinations of different colours in our European flags:
 ```{r fig.height = 6, fig.width = 8}
+#library(UpSetR)
 upset <- upset(
   flags_data,
   # Careful: we have to manually specify how many subsets 
@@ -283,10 +305,12 @@ find_bars_or_stripes <- function(row, pattern) {
 
 We can get the corresponding plot by running the following code (note that the overlaps between different filters that match the same intersections are not very well implemented yet, so we have to filter 1 variable at a time):
 ```{r fig.height = 6, fig.width = 8}
+#library(UpSetR)
 upset(
   flags_data,
   nsets = ncol(flags_data) - 3,
   nintersects = NA,
+  order.by = "freq",
   text.scale = 2,
   line.size = 1.2,
   point.size = 3.5,
@@ -306,11 +330,11 @@ upset(
   )
 )
 
-
 upset(
   flags_data,
   nsets = ncol(flags_data) - 3,
   nintersects = NA,
+  order.by = "freq",
   text.scale = 2,
   line.size = 1.2,
   point.size = 3.5,
@@ -341,11 +365,13 @@ find_number_bars_or_stripes <- function(row, pattern, quantity) {
 ```
 
 ```{r fig.height = 6, fig.width = 8}
+#library(UpSetR)
 n = 3
 upset(
   flags_data,
   nsets = ncol(flags_data) - 3,
   nintersects = NA,
+  order.by = "freq",
   text.scale = 2,
   line.size = 1.2,
   point.size = 3.5,
@@ -369,6 +395,8 @@ upset(
 
 We can also look for specific items by name and draw a point on the corresponding bars. For instance, let's find the alpine European countries (countries that cover a portion of the Alps) and Ireland :)!
 ```{r fig.height = 6, fig.width = 8}
+#library(UpSetR)
+
 alpine_countries <- c("Austria",
                      "Switzerland",
                      "Liechtenstein",
@@ -413,3 +441,6 @@ new_flags_data <- melt(flags_list) %>%
   dplyr::mutate(value = 1)  %>%
   tidyr::spread(key, value, fill = 0)
 ```
+
+
+Thanks to [Jean Manguy](https://jean.manguy.eu/) for feedback and helpful R suggestions.
