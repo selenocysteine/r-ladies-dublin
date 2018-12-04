@@ -43,11 +43,11 @@ flags_data <- read.csv("https://raw.githubusercontent.com/selenocysteine/r-ladie
 head(flags_data, 10)
 ```
 
-Each row of this dataset corresponds to the **flag** of a **country** that is (at least in part) geographically located in **Europe**. As for the columns, they correspond to 1 identifier variable and 9 measured variables:
+Each row of this dataset corresponds to the **flag** of a **country** that is (at least in part) geographically located in **Europe**. The columns correspond to 1 identifier variable (contry) and 9 measured variables:
 
-* *country*: name of each country (ID variable); 
-* *bars*: number of longitudinal sections on each flag (int); 
-* *stripes*: number of latitudinal sections on each flag (int); 
+* *country*: name of each country; 
+* *bars*: number of vertical sections on each flag (int); 
+* *stripes*: number of horizontal sections on each flag (int); 
 * *red*, *green*, *blue*, *gold*, *white*, *black*, *orange*: whether a colour is present on a flag or not (yes = 1, no = 0).
 
 Let's edit the dataset with a pet peeve of mine :)
