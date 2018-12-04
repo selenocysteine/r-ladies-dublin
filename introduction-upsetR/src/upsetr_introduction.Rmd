@@ -259,7 +259,7 @@ flags_list %>%
 This is a bit ugly, and Vennerable does not offer quick ways to customise the colours. However, it is a bit more informative than the Venn diagram, although we still have to read the numbers to really understand the sizes of the three sets.
 
 ### Multiple sets examples, using the R libraries venn and Vennerable
-What if we are interested in seeing how the nine different colours are combined across the flags?
+What if we are interested in seeing how the seven different colours are combined across the flags?
 
 Vennerable can deal with a maximum of 5 subsets, so we can remove the least common colours (orange and black). However, we still get an unreadable result:
 ```{r}
