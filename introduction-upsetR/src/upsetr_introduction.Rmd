@@ -40,33 +40,56 @@ We can load the input dataset from my github:
 ```{r}
 flags_data <- read.csv("https://raw.githubusercontent.com/selenocysteine/r-ladies-dublin/master/introduction-upsetR/data/flags.csv")
 #flags_data <- read.csv("../data/flags.csv")
-head(flags_data)
+head(flags_data, 10)
 ```
+
+Each row of this dataset corresponds to the **flag** of a **country** that is (at least in part) geographically located in **Europe**. As for the columns, they correspond to 1 identifier variable and 9 measured variables:
+
+* *country*: name of each country (ID variable); 
+* *bars*: number of longitudinal sections on each flag (int); 
+* *stripes*: number of latitudinal sections on each flag (int); 
+* *red*, *green*, *blue*, *gold*, *white*, *black*, *orange*: whether a colour is present on a flag or not (yes = 1, no = 0).
+
+Let's edit the dataset with a pet peeve of mine :)
+```{r}
+flags_data <- flags_data %>%
+  dplyr::add_row(country = "European Union",
+                 bars = 0,
+                 stripes = 0,
+                 red = 0,
+                 green = 0,
+                 blue = 1,
+                 gold = 1, 
+                 white = 0,
+                 black = 0,
+                 orange = 0
+                 )
+```
+
+Total number of flags in the dataframe:
 ```{r}
 nrow(flags_data)
 ```
 
-Each row of this dataset corresponds to the **flag** of a **country** that is (at least in part) geographically located in **Europe**. As for the columns, they correspond to:
 
-* *country*: name of the country; 
-* *bars*: number of longitudinal sections on the flag (int); 
-* *stripes*: number of latitudinal sections on the flag (int); 
-* *red*, *green*, *blue*, *gold*, *white*, *black*, *orange*: whether the corresponding colour is present on the flag (yes = 1, no = 0).
+The original source for this data is [https://archive.ics.uci.edu/ml/datasets/Flags](https://archive.ics.uci.edu/ml/datasets/Flags). However, the data available at this address is from the 80s (before of the fall of the Berlin Wall, the Yugoslav Wars, etc), so I manually updated it with information about more recent flags taken from [https://en.wikipedia.org/wiki/Flags_of_Europe](https://en.wikipedia.org/wiki/Flags_of_Europe).
 
-The original source is [https://archive.ics.uci.edu/ml/datasets/Flags](https://archive.ics.uci.edu/ml/datasets/Flags). However, the data available at this address is from the 80s (before the fall of the Berlin Wall, before the Yugoslav Wars, etc), so I manually updated it with information from [https://en.wikipedia.org/wiki/Flags_of_Europe](https://en.wikipedia.org/wiki/Flags_of_Europe).
+## (Fast) exploratory analysis of the dataset
+Let's give a quick view to the data contained in the dataset by making some **exploratory plots** with the **ggplot2** library (contained in the library *tidyverse*) to get a general idea of the general distribution of features (colours / bars / stripes) among flags.
 
-## Have a fast exploratory analysis of the data
-Let's give a quick view to the data contained in the dataset by making some **exploratory plots** with the **ggplot2** library (contained in the package tidyverse) and getting a general idea of the overall features (colours / bars / stripes) of the flags.
+**A tiny problem:** the input dataframe is in a **wide format** (1 column for the identifier (country) and 1 column per variable), while ggplot2 prefers a **narrow format** (1 column with an identifier (country), 1 column with variable names, 1 column with the value for each variable). 
 
-> **A tiny problem:** the input dataframe is in a **wide format** (1 column for the identifier (country) and 1 column per variable), while ggplot2 prefers a **narrow format** (1 column with an identifier (country), 1 column with variable names, 1 column with the value for each variable). 
+Thus, we start by **reshaping** the dataset into a **narrow format**, and by splitting it in two parts (quantitative vs binary attributes). 
 
-Thus, we start by **reshaping** the dataset into a **narrow format**, and by splitting it in two parts (quantitative vs binary attributes):
+
 ```{r}
+# For the two quantitative variables (number of bars and number of stripes)
 tidy_flags_data_quant <- flags_data %>%
   dplyr::select(country, bars, stripes) %>%
   tidyr::gather(type, number, -country)
-head(tidy_flags_data_quant, 5)
+head(tidy_flags_data_quant, 3)
 
+# For the seven binary variables (presence or absence of colours)
 tidy_flags_data_col <- flags_data %>%
   dplyr::select(-c(bars, stripes)) %>%
   tidyr::gather(colour, value, -country) %>%
@@ -78,7 +101,7 @@ tidy_flags_data_col <- flags_data %>%
   # (getting the most frequent ones first)
   dplyr::mutate(colour = forcats::fct_infreq(.$colour))
 
-head(tidy_flags_data_col, 5)
+head(tidy_flags_data_col, 3)
 ```
 
 We also define a **colour palette**, using some official hex colour codes from some european flags (because why not):
@@ -162,14 +185,13 @@ tidy_flags_data_quant %>%
   theme(text = element_text(size = 15))
 ```
 
-## Find shared properties of our data
+## Find shared elements between groups in our data
 Let's say that we are interested in seeing how many European flags have both bars and stripes, or how many European flags contain the colour red, but also the colour white (at least, let's pretend that this is an interesting scientific question :). This is a typical issue of finding intersections in our data, where some people would resort to something like a Venn diagram.
 
 ### Venn diagrams
 
 #### Data preparation
 Several R libraries for plotting Venn / Euler diagrams require a **list of vectors** as input. Each **vector** in the list has to correspond to a **set** (and contain all of its elements), and the name of each item in the list should correspond to the name of the corresponding set. 
-
 
 I just put here a bit of code that exploit the tidyverse library to quickly transform a binary, wide dataframe like *flags_data* into a list like this. Note that, for the two quantitative variables in our dataframe (*bars* and *stripes*), this code will just simplify each observation to "absence/presence": 
 ```{r}
@@ -196,30 +218,39 @@ Output:
 head(flags_list, 2)
 ```
 
+Let's add a set representing flags with neither bars nor stripes:
+```{r}
+flags_list[["no sections"]] <- flags_data %>%
+  dplyr::filter(bars == 0 & stripes == 0) %>%
+  dplyr::pull(country) %>%
+  as.character()
+```
 
-#### 2 sets examples, using the R libraries venn and Vennerable
+
+#### 3 sets examples, using the R libraries venn and Vennerable
 Let's show how many European flags have **both stripes and bars** with a simple Venn diagram generated with the **venn** library (note: this library also accepts binary dataframes, but we will use the previously generated list of vectors *flags_list*):
 ```{r}
 #library(venn)
 flags_list %>% 
-  # Extracting just the two sets of interest
-  magrittr::extract(c("bars", "stripes")) %>%
+  # Extracting just the three sets of interest (flags with either bars, stripes, or neither)
+  magrittr::extract(c("bars", "stripes", "no sections")) %>%
   venn::venn(zcolor = "style",
              # Increase font size for labels and values
              cexsn = 2, 
-             cexil = 2)
+             cexil = 2,
+             borders = FALSE)
 ```
 
 So, no European flags have both bars and stripes. In my opinion, this type of visualisation is not very informative, because: (i) the **areas** of the circles are **not proportional** to the number of items contained in them, (2) the **empty intersection** is still **shown**.
 
-We can replot this with the **Vennerable** library, that is a bit more flexible in some regards, for instance by allowing to define **Euler plots** (not showing empty intersections), and to weight the area of each circle:
+We can replot this with the **Vennerable** library, that is a bit more flexible in some regards, for instance by allowing to draw **Euler plots** (not showing empty intersections), and to weight the area of each circle:
 ```{r}
 #library(Vennerable)
 flags_list %>%
-  magrittr::extract(c("bars", "stripes")) %>%
+  magrittr::extract(c("bars", "stripes", "no sections")) %>%
   # First, we have to create a Vennerable::Venn() object, 
   # with the sizes of each intersection, and then we can plot it
-  Vennerable::Venn() %T>% print() %>%
+  Vennerable::Venn() %>%
   plot(type = "circles",
        doWeights = TRUE,
        doEuler = TRUE)
@@ -230,20 +261,11 @@ This is a bit ugly, and Vennerable does not offer quick ways to customise the co
 ### Multiple sets examples, using the R libraries venn and Vennerable
 What if we are interested in seeing how the nine different colours are combined across the flags?
 
-Vennerable throws an error, because we are asking it to deal with too many subsets (9):
-```{r eval=FALSE}
-#library(Vennerable)
-flags_list %>%
-  magrittr::extract(!(names(.) %in% c("bars", "stripes"))) %>%
-  Vennerable::Venn() %>%
-  plot()
-```
-
-We can remove the least common colours (orange and black), but we will still get an unreadable result:
+Vennerable can deal with a maximum of 5 subsets, so we can remove the least common colours (orange and black). However, we still get an unreadable result:
 ```{r}
 #library(Vennerable)
 flags_list %>%
-  magrittr::extract(!(names(.) %in% c("bars", "stripes", "orange", "black"))) %>%
+  magrittr::extract(!(names(.) %in% c("bars", "stripes", "no sections", "orange", "black"))) %>%
   Vennerable::Venn() %>%
   plot()
 ```
@@ -253,7 +275,7 @@ The venn library is more optimised to deal with multiple sets. Here, we get some
 ```{r}
 #library(venn)
 flags_list %>%
-  magrittr::extract(!(names(.) %in% c("bars", "stripes"))) %>%
+  magrittr::extract(!(names(.) %in% c("bars", "stripes", "no sections"))) %>%
   # the option zcolor can be used to set a predetermined colour for each subset; 
   # the palette has to be in the same order as the list of sets, so we reorder it
   venn::venn(zcolor = flag_palette[names(.)], 
@@ -267,12 +289,16 @@ UpSetR is an R implementation of the upset plot format (originally invented by L
 
 The vignettes, available at [https://cran.r-project.org/web/packages/UpSetR/README.html](https://cran.r-project.org/web/packages/UpSetR/README.html), illustrate its usage more in detail. There are still some bugs and awkward features, but it is overall promising and already useful.
 
-We can use as an input our initial **binary dataframe** *flags_data*. Note that UpsetR is smart enough to automatically **ignore non-binary columns** and treat them as **metadata** (attributes) of each datapoint. 
+We can use as an input our initial **binary dataframe** *flags_data*. Note that UpsetR is smart enough to automatically **ignore non-binary columns** and treat them as **metadata** (attributes) of each datapoint:
+```{r}
+head(flags_data, 5)
+```
+
 
 Just by plotting our flag colours with default options, we already get a much clearer outline of the combinations of different colours in our European flags:
 ```{r fig.height = 6, fig.width = 8}
 #library(UpSetR)
-upset <- upset(
+upset(
   flags_data,
   # Careful: we have to manually specify how many subsets 
   # we want to display (we can also specify them by column name),
@@ -294,7 +320,6 @@ The plot is highly costumisable (you can edit the colour of the bars and of the 
 ?upset
 ```
 
-
 One of the interesting features of UpSetR is the **annotation** of the different intersections with **metadata**. The process is a bit awkward and often requires defining a specific filter functions (see the vignettes for further details), but very handy in some cases. For instance, we can define a filter function that identifies all the flags that have bars or stripes:
 ```{r}
 find_bars_or_stripes <- function(row, pattern) {
@@ -303,7 +328,7 @@ find_bars_or_stripes <- function(row, pattern) {
 }
 ```
 
-We can get the corresponding plot by running the following code (note that the overlaps between different filters that match the same intersections are not very well implemented yet, so we have to filter 1 variable at a time):
+We can get an annotated plot that shows the position of flags with bars by running the following code. Note that, although it is possible to use multiple filters on the same plot, the overlaps between different filters that match the same intersections are not very well implemented yet, so it is usually safer to filter 1 variable at a time (e.g. in this case we cannot display striped and barred flags at the same time).
 ```{r fig.height = 6, fig.width = 8}
 #library(UpSetR)
 upset(
@@ -329,71 +354,10 @@ upset(
     )
   )
 )
-
-upset(
-  flags_data,
-  nsets = ncol(flags_data) - 3,
-  nintersects = NA,
-  order.by = "freq",
-  text.scale = 2,
-  line.size = 1.2,
-  point.size = 3.5,
-  # Ask to display the legend
-  query.legend = "top",
-  # Annotation filters
-  queries = list(
-    # Here we specify that the params of our filter (the pattern argument)
-    # is stripes
-    list(
-      query = find_bars_or_stripes,
-      params = list("stripes"),
-      color = "purple",
-      query.name = "Flags with stripes",
-      active = T
-    )
-  )
-)
-```
-
-We can also decide we are interested in those flags with only a certain number of bars/stripes, and create a more complex filter function accordingly:
-```{r}
-find_number_bars_or_stripes <- function(row, pattern, quantity) {
-  # pattern is either bars or stripes,
-  # quantity is >= 0
-  data <- (row[pattern] >= quantity)
-}
-```
-
-```{r fig.height = 6, fig.width = 8}
-#library(UpSetR)
-n = 3
-upset(
-  flags_data,
-  nsets = ncol(flags_data) - 3,
-  nintersects = NA,
-  order.by = "freq",
-  text.scale = 2,
-  line.size = 1.2,
-  point.size = 3.5,
-  query.legend = "top",
-  queries = list(
-    # We can add the additional argument of the filter function (the number n)
-    # to the list of params
-    list(
-      query = find_number_bars_or_stripes,
-      params = list("bars", n),
-      color = "red",
-      query.name = paste("Flags with", n, "or more bars"),
-      active = T
-    )
-  )
-)
-
-
 ```
 
 
-We can also look for specific items by name and draw a point on the corresponding bars. For instance, let's find the alpine European countries (countries that cover a portion of the Alps) and Ireland :)!
+We can also look for specific items by name using the filter function pre-defined in UpSetR called *element* and draw a point (sadly, with random height...) on the bar corresponding to the intersection containing these items. For instance, let's find the alpine European countries (countries that cover a portion of the Alps) and Ireland :)!
 ```{r fig.height = 6, fig.width = 8}
 #library(UpSetR)
 
@@ -413,17 +377,27 @@ upset(
   text.scale = 2,
   line.size = 1.2,
   point.size = 3.5,
+  query.legend = "top",
   queries = list(
+    list(
+      query = find_bars_or_stripes,
+      params = list("bars"),
+      color = "orange",
+      query.name = "Flags with bars",
+      active = T
+    ),
     list(
       query = elements,
       params = list("country", "Ireland"),
-      color = "green",
+      color = "darkgreen",
+      query.name = "Ireland",
       active = F
     ),
     list(
       query = elements,
       params = list("country", alpine_countries),
       color = "red",
+      query.name = "Alpine countries",
       active = F
     )
   )
@@ -440,6 +414,7 @@ new_flags_data <- melt(flags_list) %>%
   dplyr::group_by(country, key) %>%
   dplyr::mutate(value = 1)  %>%
   tidyr::spread(key, value, fill = 0)
+head(new_flags_data, 5)
 ```
 
 
