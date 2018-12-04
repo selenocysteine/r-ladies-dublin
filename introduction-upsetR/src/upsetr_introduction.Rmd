@@ -241,7 +241,7 @@ flags_list %>%
              borders = FALSE)
 ```
 
-So, no European flags have both bars and stripes. In my opinion, this type of visualisation is not very informative, because: (i) the **areas** of the circles are **not proportional** to the number of items contained in them, (2) the **empty intersection** is still **shown**.
+So, no European flags have both bars and stripes. In my opinion, this type of visualisation is not very informative, because: (i) the **areas** of the circles are **not proportional** to the number of items contained in them, (2) **empty intersections** is still **shown**.
 
 We can replot this with the **Vennerable** library, that is a bit more flexible in some regards, for instance by allowing to draw **Euler plots** (not showing empty intersections), and to weight the area of each circle:
 ```{r}
@@ -256,7 +256,7 @@ flags_list %>%
        doEuler = TRUE)
 ```
 
-This is a bit ugly, and Vennerable does not offer quick ways to customise the colours. However, it is a bit more informative than the Venn diagram, although we still have to read the numbers to really understand the size of the two sets.
+This is a bit ugly, and Vennerable does not offer quick ways to customise the colours. However, it is a bit more informative than the Venn diagram, although we still have to read the numbers to really understand the sizes of the three sets.
 
 ### Multiple sets examples, using the R libraries venn and Vennerable
 What if we are interested in seeing how the nine different colours are combined across the flags?
